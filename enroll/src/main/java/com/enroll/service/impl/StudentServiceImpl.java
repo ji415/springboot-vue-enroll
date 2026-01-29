@@ -1,4 +1,13 @@
 package com.enroll.service.impl;
+import cn.dev33.satoken.stp.StpUtil;
+import cn.dev33.satoken.context.SaHolder;
+import com.enroll.entity.SysLog;
+import com.enroll.entity.SysUser;
+import com.enroll.enums.StudentStatus;
+import com.enroll.mapper.SysLogMapper;
+import com.enroll.service.SysUserService;
+
+import java.io.Serializable;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -6,11 +15,21 @@ import com.enroll.dto.StudentSubmitDTO;
 import com.enroll.entity.Student;
 import com.enroll.mapper.StudentMapper;
 import com.enroll.service.StudentService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Service
 public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> implements StudentService {
+    private final SysLogMapper sysLogMapper;
+    private final SysUserService sysUserService;
+
+    public StudentServiceImpl(SysLogMapper sysLogMapper, SysUserService sysUserService) {
+        this.sysLogMapper = sysLogMapper;
+        this.sysUserService = sysUserService;
+    }
 
     @Override
     public Student getByIdCard(String idCard) {
@@ -50,6 +69,7 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
     }
 
     @Override
+    @Transactional
     public void audit(Long id, Integer status) {
         if (status == null || (status != 1 && status != 2)) {
             throw new RuntimeException("审核状态非法");
@@ -59,7 +79,72 @@ public class StudentServiceImpl extends ServiceImpl<StudentMapper, Student> impl
         if (s.getStatus() == null || s.getStatus() != 0) {
             throw new RuntimeException("仅待审核记录可审核");
         }
+
+        String beforeKey = statusKey(s.getStatus());
+        String afterKey = statusKey(status);
+
         s.setStatus(status);
         this.updateById(s);
+
+        insertLog("AUDIT", id, beforeKey, afterKey, null);
     }
+    @Override
+    @Transactional
+    public boolean removeById(Serializable id) {
+        Long studentId = null;
+        if (id instanceof Long) studentId = (Long) id;
+        else if (id instanceof String) {
+            try { studentId = Long.parseLong((String) id); } catch (Exception ignored) {}
+        }
+
+        Student before = (studentId == null) ? null : this.getById(studentId);
+        String beforeKey = before == null ? null : statusKey(before.getStatus());
+
+        boolean ok = super.removeById(id);
+        if (ok && studentId != null) {
+            insertLog("DELETE", studentId, beforeKey, null, null);
+        }
+        return ok;
+    }
+    private String statusKey(Integer code) {
+        StudentStatus st = StudentStatus.fromCode(code);
+        return st == null ? null : st.getKey();
+    }
+
+    private void insertLog(String action, Long studentId, String beforeStatus, String afterStatus, String remark) {
+        Long userId = -1L;
+        String username = "unknown";
+
+        try {
+            userId = StpUtil.getLoginIdAsLong();
+            SysUser u = sysUserService.getById(userId);
+            if (u != null && u.getUsername() != null) username = u.getUsername();
+        } catch (Exception ignored) {}
+
+//        String ip = null;
+//        try { ip = SaHolder.getRequest().getRemoteAddr(); } catch (Exception ignored) {}
+        String ip = null;
+        try {
+            ServletRequestAttributes attrs =
+                    (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null) {
+                HttpServletRequest req = attrs.getRequest();
+                ip = req.getRemoteAddr();
+            }
+        } catch (Exception ignored) {}
+
+        SysLog log = new SysLog();
+        log.setUserId(userId);
+        log.setUsername(username);
+        log.setAction(action);
+        log.setTargetType("STUDENT");
+        log.setTargetId(studentId);
+        log.setBeforeStatus(beforeStatus);
+        log.setAfterStatus(afterStatus);
+        log.setRemark(remark);
+        log.setIp(ip);
+
+        sysLogMapper.insert(log);
+    }
+
 }

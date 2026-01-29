@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import com.enroll.enums.StudentStatus;
 
 @Data
 @TableName("student")
@@ -32,4 +33,15 @@ public class Student {
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
+    // ====== 计算字段：给前端/日志用（不入库） ======
+    public String getStatusKey() {
+        StudentStatus s = StudentStatus.fromCode(this.status);
+        return s == null ? null : s.getKey();
+    }
+
+    public String getStatusLabelCn() {
+        StudentStatus s = StudentStatus.fromCode(this.status);
+        return s == null ? null : s.getLabelCn();
+    }
+
 }

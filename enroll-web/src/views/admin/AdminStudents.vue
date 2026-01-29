@@ -12,7 +12,7 @@
     <el-card style="margin: 12px 0;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
         <div style="font-weight: 600;">报名状态占比</div>
-        <div style="color:#666; font-size: 12px;">统计基于当前列表页数据</div>
+        <div style="color:#666; font-size: 12px;">统计基于全量数据</div>
       </div>
       <div ref="chartRef" style="width: 100%; height: 280px;"></div>
     </el-card>
@@ -124,13 +124,152 @@
 
 <!--onMounted(load);-->
 <!--</script>-->
-<script setup>
-import { exportApproved } from "@/api/student";
 
-import { ref, onMounted, onBeforeUnmount, computed, nextTick } from "vue";
+
+
+<!--<script setup>-->
+<!--import { exportApproved } from "@/api/student";-->
+
+<!--import { ref, onMounted, onBeforeUnmount, computed, nextTick } from "vue";-->
+<!--import { ElMessage, ElMessageBox } from "element-plus";-->
+<!--import * as echarts from "echarts";-->
+<!--import { adminPage, adminDetail, adminAudit, adminDelete } from "@/api/student";-->
+
+<!--const keyword = ref("");-->
+<!--const page = ref(1);-->
+<!--const size = ref(10);-->
+<!--const total = ref(0);-->
+<!--const rows = ref([]);-->
+
+<!--const detailVisible = ref(false);-->
+<!--const detail = ref(null);-->
+
+<!--// ===== 饼图相关 =====-->
+<!--const chartRef = ref(null);-->
+<!--let chartIns = null;-->
+
+<!--const stat = computed(() => {-->
+<!--  const c = { pending: 0, approved: 0, rejected: 0 };-->
+<!--  for (const r of rows.value || []) {-->
+<!--    if (r.status === 0) c.pending++;-->
+<!--    else if (r.status === 1) c.approved++;-->
+<!--    else if (r.status === 2) c.rejected++;-->
+<!--  }-->
+<!--  return c;-->
+<!--});-->
+
+<!--const resizeChart = () => {-->
+<!--  chartIns?.resize();-->
+<!--};-->
+
+<!--const renderChart = () => {-->
+<!--  if (!chartRef.value) return;-->
+
+<!--  if (!chartIns) {-->
+<!--    chartIns = echarts.init(chartRef.value);-->
+<!--    window.addEventListener("resize", resizeChart);-->
+<!--  }-->
+
+<!--  const { pending, approved, rejected } = stat.value;-->
+
+<!--  chartIns.setOption({-->
+<!--    tooltip: { trigger: "item" },-->
+<!--    legend: { bottom: 0 },-->
+<!--    series: [-->
+<!--      {-->
+<!--        type: "pie",-->
+<!--        radius: ["35%", "70%"],-->
+<!--        label: { formatter: "{b}: {c} ({d}%)" },-->
+<!--        data: [-->
+<!--          { value: pending, name: "待审核" },-->
+<!--          { value: approved, name: "通过" },-->
+<!--          { value: rejected, name: "驳回" },-->
+<!--        ],-->
+<!--      },-->
+<!--    ],-->
+<!--  });-->
+<!--};-->
+
+<!--// ===== 原功能：加载列表 =====-->
+<!--const load = async () => {-->
+<!--  try {-->
+<!--    const res = await adminPage({ page: page.value, size: size.value, keyword: keyword.value });-->
+<!--    const p = res.data.data;-->
+<!--    rows.value = p.records;-->
+<!--    total.value = p.total;-->
+
+<!--    await nextTick();   // 等 DOM 更新（饼图容器渲染完成）-->
+<!--    renderChart();      // 画饼图-->
+<!--  } catch (e) {-->
+<!--    ElMessage.error(e?.response?.data?.msg || "Load failed");-->
+<!--  }-->
+<!--};-->
+
+<!--const openDetail = async (id) => {-->
+<!--  try {-->
+<!--    const res = await adminDetail(id);-->
+<!--    detail.value = res.data.data;-->
+<!--    detailVisible.value = true;-->
+<!--  } catch (e) {-->
+<!--    ElMessage.error(e?.response?.data?.msg || "Detail failed");-->
+<!--  }-->
+<!--};-->
+
+<!--const audit = async (id, status) => {-->
+<!--  try {-->
+<!--    await adminAudit(id, status);-->
+<!--    ElMessage.success("Updated");-->
+<!--    await load();-->
+<!--  } catch (e) {-->
+<!--    ElMessage.error(e?.response?.data?.msg || "Audit failed");-->
+<!--  }-->
+<!--};-->
+
+<!--const remove = async (id) => {-->
+<!--  await ElMessageBox.confirm("Confirm delete?", "Warning", { type: "warning" });-->
+<!--  try {-->
+<!--    await adminDelete(id);-->
+<!--    ElMessage.success("Deleted");-->
+<!--    await load();-->
+<!--  } catch (e) {-->
+<!--    ElMessage.error(e?.response?.data?.msg || "Delete failed");-->
+<!--  }-->
+<!--};-->
+<!--//Excel导出-->
+<!--const onExport = async () => {-->
+<!--  try {-->
+<!--    const res = await exportApproved();-->
+<!--    const blob = new Blob([res.data], {-->
+<!--      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",-->
+<!--    });-->
+
+<!--    const url = window.URL.createObjectURL(blob);-->
+<!--    const a = document.createElement("a");-->
+<!--    a.href = url;-->
+<!--    a.download = "通过审核学生名单.xlsx";-->
+<!--    document.body.appendChild(a);-->
+<!--    a.click();-->
+<!--    a.remove();-->
+<!--    window.URL.revokeObjectURL(url);-->
+<!--  } catch (e) {-->
+<!--    ElMessage.error("导出失败");-->
+<!--  }-->
+<!--};-->
+
+<!--onMounted(load);-->
+
+<!--onBeforeUnmount(() => {-->
+<!--  window.removeEventListener("resize", resizeChart);-->
+<!--  chartIns?.dispose();-->
+<!--  chartIns = null;-->
+<!--});-->
+<!--</script>-->
+<script setup>
+import { ref, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import * as echarts from "echarts";
-import { adminPage, adminDetail, adminAudit, adminDelete } from "@/api/student";
+import { adminPage, adminDetail, adminAudit, adminDelete, exportApproved, adminStatistics } from "@/api/student";
+
 
 const keyword = ref("");
 const page = ref(1);
@@ -141,23 +280,13 @@ const rows = ref([]);
 const detailVisible = ref(false);
 const detail = ref(null);
 
-// ===== 饼图相关 =====
+// ===== 饼图相关（全局统计）=====
 const chartRef = ref(null);
 let chartIns = null;
 
-const stat = computed(() => {
-  const c = { pending: 0, approved: 0, rejected: 0 };
-  for (const r of rows.value || []) {
-    if (r.status === 0) c.pending++;
-    else if (r.status === 1) c.approved++;
-    else if (r.status === 2) c.rejected++;
-  }
-  return c;
-});
+const stats = ref({ pending: 0, approved: 0, rejected: 0 });
 
-const resizeChart = () => {
-  chartIns?.resize();
-};
+const resizeChart = () => chartIns?.resize();
 
 const renderChart = () => {
   if (!chartRef.value) return;
@@ -167,7 +296,7 @@ const renderChart = () => {
     window.addEventListener("resize", resizeChart);
   }
 
-  const { pending, approved, rejected } = stat.value;
+  const { pending, approved, rejected } = stats.value;
 
   chartIns.setOption({
     tooltip: { trigger: "item" },
@@ -187,18 +316,27 @@ const renderChart = () => {
   });
 };
 
-// ===== 原功能：加载列表 =====
+// 列表
 const load = async () => {
   try {
     const res = await adminPage({ page: page.value, size: size.value, keyword: keyword.value });
     const p = res.data.data;
     rows.value = p.records;
     total.value = p.total;
-
-    await nextTick();   // 等 DOM 更新（饼图容器渲染完成）
-    renderChart();      // 画饼图
   } catch (e) {
     ElMessage.error(e?.response?.data?.msg || "Load failed");
+  }
+};
+
+// 全局统计（调用后端接口）
+const loadStatistics = async () => {
+  try {
+    const res = await adminStatistics();
+    stats.value = res.data.data;
+    await nextTick();
+    renderChart();
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.msg || "统计加载失败");
   }
 };
 
@@ -217,6 +355,7 @@ const audit = async (id, status) => {
     await adminAudit(id, status);
     ElMessage.success("Updated");
     await load();
+    await loadStatistics();
   } catch (e) {
     ElMessage.error(e?.response?.data?.msg || "Audit failed");
   }
@@ -228,11 +367,14 @@ const remove = async (id) => {
     await adminDelete(id);
     ElMessage.success("Deleted");
     await load();
+    await loadStatistics();
   } catch (e) {
     ElMessage.error(e?.response?.data?.msg || "Delete failed");
   }
 };
-//Excel导出
+
+
+// Excel导出
 const onExport = async () => {
   try {
     const res = await exportApproved();
@@ -253,7 +395,10 @@ const onExport = async () => {
   }
 };
 
-onMounted(load);
+onMounted(() => {
+  load();
+  loadStatistics();
+});
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", resizeChart);

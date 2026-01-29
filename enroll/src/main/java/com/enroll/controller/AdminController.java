@@ -1,4 +1,5 @@
 package com.enroll.controller;
+import com.enroll.vo.StudentVO;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -15,10 +16,13 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
-
+import cn.dev33.satoken.annotation.SaCheckLogin;
+@SaCheckLogin
 @RestController
 @RequestMapping("/api/admin/students")
 public class AdminController {
@@ -29,9 +33,25 @@ public class AdminController {
         this.studentService = studentService;
     }
 
-    // 分页 + 姓名/手机号模糊搜索
+//    // 分页 + 姓名/手机号模糊搜索
+//    @GetMapping
+//    public R<Page<Student>> page(
+//            @RequestParam(defaultValue = "1") long page,
+//            @RequestParam(defaultValue = "10") long size,
+//            @RequestParam(required = false) String keyword
+//    ) {
+//        LambdaQueryWrapper<Student> qw = new LambdaQueryWrapper<>();
+//        if (StringUtils.hasText(keyword)) {
+//            qw.and(w -> w.like(Student::getName, keyword)
+//                    .or()
+//                    .like(Student::getParentPhone, keyword));
+//        }
+//        qw.orderByDesc(Student::getCreateTime);
+//        return R.ok(studentService.page(new Page<>(page, size), qw));
+//    }
+// 分页 + 姓名/手机号模糊搜索（返回 VO：status 是字符串，不返回 0/1/2）
     @GetMapping
-    public R<Page<Student>> page(
+    public R<Page<StudentVO>> page(
             @RequestParam(defaultValue = "1") long page,
             @RequestParam(defaultValue = "10") long size,
             @RequestParam(required = false) String keyword
@@ -43,18 +63,34 @@ public class AdminController {
                     .like(Student::getParentPhone, keyword));
         }
         qw.orderByDesc(Student::getCreateTime);
-        return R.ok(studentService.page(new Page<>(page, size), qw));
+
+        Page<Student> pageData = studentService.page(new Page<>(page, size), qw);
+
+        Page<StudentVO> voPage = new Page<>();
+        voPage.setCurrent(pageData.getCurrent());
+        voPage.setSize(pageData.getSize());
+        voPage.setTotal(pageData.getTotal());
+        voPage.setRecords(
+                pageData.getRecords().stream()
+                        .map(StudentVO::from)
+                        .collect(Collectors.toList())
+        );
+
+        return R.ok(voPage);
     }
+
 
     // 详情
 //    @GetMapping("/{id}")
     // 详情（只匹配数字 id）
+    // 详情（只匹配数字 id，返回 VO：status 是字符串）
     @GetMapping("/{id:\\d+}")
-    public R<Student> detail(@PathVariable Long id) {
+    public R<StudentVO> detail(@PathVariable Long id) {
         Student s = studentService.getById(id);
         if (s == null) return R.fail("记录不存在");
-        return R.ok(s);
+        return R.ok(StudentVO.from(s));
     }
+
 
     // 审核：通过(1) / 驳回(2)
 //    @PutMapping("/{id}/audit")
@@ -108,4 +144,34 @@ public class AdminController {
                 .sheet("通过审核")
                 .doWrite(rows);
     }
+
+    // 全局统计：返回枚举 key -> count（彻底不返回 0/1/2）
+    @GetMapping("/statistics")
+    public R<?> statistics() {
+        List<Map<String, Object>> list = studentService.listMaps(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<Student>()
+                        .select("status, count(*) as cnt")
+                        .groupBy("status")
+        );
+
+        // 用枚举 key 做结果：PENDING / APPROVED / REJECTED
+        Map<String, Integer> res = new HashMap<>();
+        res.put("PENDING", 0);
+        res.put("APPROVED", 0);
+        res.put("REJECTED", 0);
+
+        for (Map<String, Object> m : list) {
+            Integer status = (Integer) m.get("status");
+            Number cnt = (Number) m.get("cnt");
+            if (status == null || cnt == null) continue;
+
+            // 0/1/2 -> 枚举 key
+            String key = com.enroll.enums.StudentStatus.fromCode(status).getKey();
+            res.put(key, cnt.intValue());
+        }
+
+        return R.ok(res);
+    }
+
+
 }
