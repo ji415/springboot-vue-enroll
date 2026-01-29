@@ -83,14 +83,12 @@ public class AdminController {
     // 详情
 //    @GetMapping("/{id}")
     // 详情（只匹配数字 id）
-    // 详情（只匹配数字 id，返回 VO：status 是字符串）
     @GetMapping("/{id:\\d+}")
-    public R<StudentVO> detail(@PathVariable Long id) {
+    public R<Student> detail(@PathVariable Long id) {
         Student s = studentService.getById(id);
         if (s == null) return R.fail("记录不存在");
-        return R.ok(StudentVO.from(s));
+        return R.ok(s);
     }
-
 
     // 审核：通过(1) / 驳回(2)
 //    @PutMapping("/{id}/audit")
@@ -145,7 +143,7 @@ public class AdminController {
                 .doWrite(rows);
     }
 
-    // 全局统计：待审核/通过/驳回数量
+    // 全局统计：返回枚举 key -> count（PENDING/APPROVED/REJECTED）
     @GetMapping("/statistics")
     public R<?> statistics() {
         List<Map<String, Object>> list = studentService.listMaps(
@@ -154,20 +152,20 @@ public class AdminController {
                         .groupBy("status")
         );
 
-        int pending = 0, approved = 0, rejected = 0;
+        Map<String, Integer> res = new HashMap<>();
+        res.put("PENDING", 0);
+        res.put("APPROVED", 0);
+        res.put("REJECTED", 0);
+
         for (Map<String, Object> m : list) {
             Integer status = (Integer) m.get("status");
             Number cnt = (Number) m.get("cnt");
-            if (status == null) continue;
-            if (status == 0) pending = cnt.intValue();
-            else if (status == 1) approved = cnt.intValue();
-            else if (status == 2) rejected = cnt.intValue();
+            if (status == null || cnt == null) continue;
+
+            String key = com.enroll.enums.StudentStatus.fromCode(status).getKey();
+            res.put(key, cnt.intValue());
         }
 
-        Map<String, Integer> res = new HashMap<>();
-        res.put("pending", pending);
-        res.put("approved", approved);
-        res.put("rejected", rejected);
         return R.ok(res);
     }
 
