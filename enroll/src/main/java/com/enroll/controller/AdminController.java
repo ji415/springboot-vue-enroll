@@ -83,14 +83,12 @@ public class AdminController {
     // 详情
 //    @GetMapping("/{id}")
     // 详情（只匹配数字 id）
-    // 详情（只匹配数字 id，返回 VO：status 是字符串）
     @GetMapping("/{id:\\d+}")
-    public R<StudentVO> detail(@PathVariable Long id) {
+    public R<Student> detail(@PathVariable Long id) {
         Student s = studentService.getById(id);
         if (s == null) return R.fail("记录不存在");
-        return R.ok(StudentVO.from(s));
+        return R.ok(s);
     }
-
 
     // 审核：通过(1) / 驳回(2)
 //    @PutMapping("/{id}/audit")
@@ -145,7 +143,7 @@ public class AdminController {
                 .doWrite(rows);
     }
 
-    // 全局统计：返回枚举 key -> count（彻底不返回 0/1/2）
+    // 全局统计：返回枚举 key -> count（PENDING/APPROVED/REJECTED）
     @GetMapping("/statistics")
     public R<?> statistics() {
         List<Map<String, Object>> list = studentService.listMaps(
@@ -154,7 +152,6 @@ public class AdminController {
                         .groupBy("status")
         );
 
-        // 用枚举 key 做结果：PENDING / APPROVED / REJECTED
         Map<String, Integer> res = new HashMap<>();
         res.put("PENDING", 0);
         res.put("APPROVED", 0);
@@ -165,7 +162,6 @@ public class AdminController {
             Number cnt = (Number) m.get("cnt");
             if (status == null || cnt == null) continue;
 
-            // 0/1/2 -> 枚举 key
             String key = com.enroll.enums.StudentStatus.fromCode(status).getKey();
             res.put(key, cnt.intValue());
         }
