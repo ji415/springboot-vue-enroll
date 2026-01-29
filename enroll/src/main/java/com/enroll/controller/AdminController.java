@@ -145,7 +145,7 @@ public class AdminController {
                 .doWrite(rows);
     }
 
-    // 全局统计：返回枚举 key -> count（彻底不返回 0/1/2）
+    // 全局统计：待审核/通过/驳回数量
     @GetMapping("/statistics")
     public R<?> statistics() {
         List<Map<String, Object>> list = studentService.listMaps(
@@ -154,22 +154,20 @@ public class AdminController {
                         .groupBy("status")
         );
 
-        // 用枚举 key 做结果：PENDING / APPROVED / REJECTED
-        Map<String, Integer> res = new HashMap<>();
-        res.put("PENDING", 0);
-        res.put("APPROVED", 0);
-        res.put("REJECTED", 0);
-
+        int pending = 0, approved = 0, rejected = 0;
         for (Map<String, Object> m : list) {
             Integer status = (Integer) m.get("status");
             Number cnt = (Number) m.get("cnt");
-            if (status == null || cnt == null) continue;
-
-            // 0/1/2 -> 枚举 key
-            String key = com.enroll.enums.StudentStatus.fromCode(status).getKey();
-            res.put(key, cnt.intValue());
+            if (status == null) continue;
+            if (status == 0) pending = cnt.intValue();
+            else if (status == 1) approved = cnt.intValue();
+            else if (status == 2) rejected = cnt.intValue();
         }
 
+        Map<String, Integer> res = new HashMap<>();
+        res.put("pending", pending);
+        res.put("approved", approved);
+        res.put("rejected", rejected);
         return R.ok(res);
     }
 
